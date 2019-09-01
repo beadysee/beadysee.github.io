@@ -1,0 +1,354 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+	<title>Mission Control</title>
+	<meta name="viewport" content="width=400px" />
+	
+	<script src="socket.io/socket.io.js"></script>
+	<link rel="stylesheet" href="style.css">
+
+	<style>
+	table, th, td {
+    		border: 1px solid black;
+}
+</style>
+
+<script>
+window.onload = function () {
+
+var dps = [];
+var chart = new CanvasJS.Chart("chartContainer", {
+	exportEnabled: true,
+	
+	//align: "bottom",
+
+	backgroundColor: "transparent",
+
+	title :{
+		text: "Distance to Ground"
+	},
+	axisY: {
+		includeZero: false,
+		maximum: 10,
+		minimum: 0
+	},
+	data: [{
+		type: "spline",
+		markerSize: 0,
+		dataPoints: dps 
+	}]
+});
+
+var xVal = 0;
+var yVal = 1;
+var updateInterval = 100;
+var dataLength = 200; // number of dataPoints visible at any point
+
+var updateChart = function (count) {
+	count = count || 1;
+	// count is number of times loop runs to generate random dataPoints.
+	for (var j = 0; j < count; j++) {		
+	
+		var yVal = document.getElementById("gndDist").innerHTML;
+		yVal = Number(yVal);
+		dps.push({
+			x: xVal,
+			y: yVal
+		});
+		xVal++;
+	}
+	if (dps.length > dataLength) {
+		dps.shift();
+	}
+	chart.render();
+};
+
+updateChart(dataLength); 
+setInterval(function(){ updateChart() }, updateInterval); 
+
+}
+</script>
+
+  </head>
+  <body>
+<br/>
+<div id="chartContainer" style="position: absolute; left: 50px; top: 150px;
+			 height: 360px; width: 25%; border: 2px solid #000000;
+			 background: linear-gradient(white 60%, red);"></div>
+<script type="text/javascript" src="canvasjs.min.js"></script> 
+
+	<b style="font-size:300%;">Mission Control</b><br>
+	
+	<br><b style="font-size:150%;">Check to Arm (Spacebar):</b><input type="checkbox" id="armed"><br><br>
+
+	<br><br><table style="width:10%" align="center">
+  		<tr>
+    			<th>Operation</th>
+    			<th>Command</th> 
+  		</tr>
+		<tr>
+   			<td>Enable/Disable Limit Switches</td>
+    			<td>S</td>
+  		</tr>
+  		<!--<tr>
+   			<td>Close Arms and Detach/td>
+    			<td>Ctrl + Z</td>
+  		</tr> -->
+		<tr>
+   			<td>Close Arms</td>
+    			<td>Ctrl + Z</td>
+  		</tr>
+    			<td>Deploy Flag</td>
+    			<td>Ctrl + X</td>
+  		</tr>
+		<tr>
+   			<td>Detach</td>
+    			<td>Ctrl + C</td>
+  		</tr>
+	</table>
+<br><br>
+	<table style="width:25%" align="center">
+  <tr>
+  <th colspan="4" style="font-size:150%;">Statuses</th>
+  </tr>
+  <tr>
+    <th>Arms</th>
+    <th>Release</th> 
+    <th>Flag</th>
+    <th>Limit Switches</th>
+  </tr>
+  <tr>
+    <td id="armStatus"></td>
+    <td id="releaseStatus"></td>
+    <td id="flagStatus"></td>
+    <td id="switchStatus"></td>
+  </tr>
+</table>
+	<span style="position: absolute; left:55px; top: 530px; font-size:200%;width:25%;">Distance to Ground (ft): <span id="gndDist"> </span></span>
+	<span style="position: absolute; right:100px; top: 200px; font-size:400%;width:25%;">Distance to Target (ft): <span id="lidarDist"> </span></span>
+
+	<script type="text/javascript">
+		document.onkeydown = function(evt) {
+			evt = evt || window.event;
+			var x = document.getElementById("armed");
+			if (x.checked == true){
+				if (evt.ctrlKey && evt.keyCode == 90) {
+					socket.emit('sig', { value: 1 })
+				}
+	
+				else if (evt.ctrlKey && evt.keyCode == 88) {
+					socket.emit('sig', { value: 2 })
+				}
+				else if (evt.ctrlKey && evt.keyCode == 67) {
+					socket.emit('sig', { value: 4})
+				}
+			}
+			if (evt.keyCode == 32){
+				if (x.checked == false){
+					document.getElementById("armed").checked = true;
+				}
+				else{
+					document.getElementById("armed").checked = false;
+				}
+			}
+			if (evt.keyCode == 83) {
+					socket.emit('sig', { value: 3})
+				}
+		};
+
+	</script>	
+
+	<script type="text/javascript">
+		var socket = io.connect();
+		
+		setInterval( function(newValue)
+		{
+			socket.emit('requestInput', { value: newValue });
+		}, 20);	
+
+
+		socket.on('getInput', function (data) {
+			document.getElementById("gndDist").innerHTML = data.value1;
+			document.getElementById("lidarDist").innerHTML = data.value3;
+			if (data.value2 == 0)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 7)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 56)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 64)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 63)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 71)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 120)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == 127)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Disabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "red";
+			}
+			if (data.value2 == -128)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -121)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -72)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -64)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -65)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Down";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+					document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "green";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -57)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Attached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "green";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -8)
+			{
+				document.getElementById("armStatus").innerHTML = "Open";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "green";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+			if (data.value2 == -1)
+			{
+				document.getElementById("armStatus").innerHTML = "Closed";
+				document.getElementById("releaseStatus").innerHTML = "Detached";
+				document.getElementById("flagStatus").innerHTML = "Up";
+				document.getElementById("switchStatus").innerHTML = "Enabled";
+				document.getElementById("armStatus").style.backgroundColor = "red";
+				document.getElementById("releaseStatus").style.backgroundColor = "red";
+				document.getElementById("flagStatus").style.backgroundColor = "red";
+				document.getElementById("switchStatus").style.backgroundColor = "green";
+			}
+		});				
+		
+	</script>
+
+  </body>
+</html>
